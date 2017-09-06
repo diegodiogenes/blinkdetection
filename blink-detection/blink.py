@@ -184,6 +184,9 @@ while True:
 
 		# if (ear < area_min and contador == 0) or (ear < area_max and contador > 0):
 		if ear < area_min:
+
+
+
 			if contador == 0:
 				tempo_inicio_piscada = timestamp
 
@@ -193,6 +196,9 @@ while True:
 				}
 
 				blink_pub.send('blinks', blink_entry)
+
+				cu = subprocess.Popen(['paplay', 'Tempo.wav'])
+
 
 				print 'close'
 
@@ -213,7 +219,9 @@ while True:
 
 				print "piscouu com tempo: ", tempo
 
-				if tempo > 2.0 and tempo < 3.0:
+				if tempo > 2.0 and tempo < 5.0:
+					#subprocess.call(['mpg123', 'Alarme.mp3'])
+					print "Alarmou"
 					subprocess.call(['mpg123', 'Alarme.mp3'])
 
 			if contador != 0:
@@ -223,6 +231,8 @@ while True:
 				}
 
 				print 'open'
+
+				cu.kill()
 
 				blink_pub.send('blinks', blink_entry)
 
