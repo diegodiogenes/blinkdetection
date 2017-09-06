@@ -198,8 +198,7 @@ while True:
 
 				blink_pub.send('blinks', blink_entry)
 
-				cu = subprocess.Popen(['paplay', 'Tempo.wav'])
-
+				ca = subprocess.Popen(['paplay', 'Tempo.wav'])
 
 				print 'close'
 
@@ -220,18 +219,10 @@ while True:
 
 				print "piscou com tempo: ", tempo
 
-				if piscadas == 0:
-					tempo_primeira_piscada = tempo_inicio_piscada
 
-				piscadas += 1
+				if tempo > 2.0 and tempo < 5.0:
+					p = subprocess.Popen(['mpg123', 'Alarme.mp3'])
 
-				if piscadas == 3:
-					tempo_entre_piscadas = timestamp - tempo_primeira_piscada
-					piscadas = 0
-
-				if tempo > 2.0 and tempo < 5.0 or tempo_entre_piscadas <= 3.0:
-					subprocess.call(['mpg123', 'Alarme.mp3'])
-					tempo_entre_piscadas = 0
 
 			if contador != 0:
 				blink_entry = {
@@ -241,7 +232,7 @@ while True:
 
 				print 'open'
 
-				cu.kill()
+				ca.kill()
 
 				blink_pub.send('blinks', blink_entry)
 
