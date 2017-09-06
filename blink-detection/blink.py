@@ -11,6 +11,7 @@ import time
 import dlib
 import cv2
 import zmq, zmq_tools
+import subprocess
 
 
 #  Pontos da regiao do olho
@@ -211,6 +212,9 @@ while True:
 				blink_pub.send('blinks', blink_entry)
 
 				print "piscouu com tempo: ", tempo
+
+				if tempo > 2.0 and tempo < 3.0:
+					subprocess.call(['mpg123', 'Alarme.mp3'])
 
 			if contador != 0:
 				blink_entry = {
