@@ -1,14 +1,9 @@
-# USAGE
-# python detect_blinks.py --shape-predictor shape_predictor_68_face_landmarks.dat --video blink_detection_demo.mp4
-# python detect_blinks.py --shape-predictor shape_predictor_68_face_landmarks.dat
-
 # import the necessary packages
 from scipy.spatial import distance as dist
 from imutils.video import FileVideoStream
 from imutils.video import VideoStream
 from imutils import face_utils
 import numpy as np
-import argparse
 import imutils
 import time
 import dlib
@@ -29,15 +24,9 @@ def eye_aspect_ratio(eye):
 
 	# return the eye aspect ratio
 	return ear
- 
-# construct the argument parse and parse the arguments
-ap = argparse.ArgumentParser()
-ap.add_argument("-p", "--shape-predictor", required=True,
-	help="path to facial landmark predictor")
-ap.add_argument("-v", "--video", type=str, default="",
-	help="path to input video file")
-args = vars(ap.parse_args())
- 
+
+# construct the argument parse and parse the argument
+
 # define two constants, one for the eye aspect ratio to indicate
 # blink and then a second constant for the number of consecutive
 # frames the eye must be below the threshold
@@ -51,8 +40,9 @@ TOTAL = 0
 # initialize dlib's face detector (HOG-based) and then create
 # the facial landmark predictor
 print("[INFO] loading facial landmark predictor...")
+preditor_path = "shape_predictor_68_face_landmarks.dat"
 detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor(args["shape_predictor"])
+preditor = dlib.shape_predictor(preditor_path)
 
 # grab the indexes of the facial landmarks for the left and
 # right eye, respectively
@@ -61,8 +51,8 @@ predictor = dlib.shape_predictor(args["shape_predictor"])
 
 # start the video stream thread
 print("[INFO] starting video stream thread...")
-vs = FileVideoStream(args["video"]).start()
-fileStream = True
+vs = VideoStream(src=0).start()
+fileStream = False
 # vs = VideoStream(src=0).start()
 # vs = VideoStream(usePiCamera=True).start()
 # fileStream = False
@@ -132,11 +122,11 @@ while True:
 			cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 		cv2.putText(frame, "EAR: {:.2f}".format(ear), (300, 30),
 			cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
- 
+
 	# show the frame
 	cv2.imshow("Frame", frame)
 	key = cv2.waitKey(1) & 0xFF
- 
+
 	# if the `q` key was pressed, break from the loop
 	if key == ord("q"):
 		break
