@@ -28,6 +28,23 @@ def calcular_ear(olho):
 
 	return ear
 
+def calcular_boca(boca):
+	D = dist.euclidean(boca[12], boca[18])
+	E = dist.euclidean(boca[13], boca[17])
+	F = dist.euclidean(boca[14], boca[16])
+	ear_boca = (D+E+F)/(3.0)
+
+	return ear_boca
+
+def calcular_pequena(boca):
+	G = dist.euclidean(boca[19]-boca[13])
+	H = dist.euclidean(boca[18]-boca[14])
+	I = dist.euclidean(boca[17]-boca[15])
+	ear_boquinha = (G+H+I)/(3.0)
+
+	return ear_boquinha
+
+
 eye_cascade = cv2.CascadeClassifier('haarcascade_eye_tree_eyeglasses.xml')
 
 """ Area minima para se considerar uma piscada (area min) e quantidade minimas
@@ -48,6 +65,7 @@ preditor = dlib.shape_predictor(preditor_path)
 
 (lStart, lEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
 (rStart, rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
+(bStart, bEnd) = face_utils.FACIAL_LANDMARKS_IDXS["mouth"]
 
 
 """
@@ -66,6 +84,8 @@ timestamp = time.time()
 key = None
 fps = 0.0
 ear = 0
+ear_boca = 0
+ear_boquinha = 0
 
 while True:
 	if fileStream and not vs.more():
@@ -114,12 +134,17 @@ while True:
 		# 	cv2.rectangle(frame,(ex + min_p[0] ,ey + min_p[1]),(ex + min_p[0] + ew,ey + eh + min_p[1]),(0,255,0),2)
 
 		for p in major_shape:
-			cv2.circle(frame, tuple(p), 2, (255, 0, 0), -1)
+			cv2.circle(frame, tuple(p), 2, (0, 0, 0), -1)
 
 		leftEye = major_shape[lStart:lEnd]
 		rightEye = major_shape[rStart:rEnd]
+		boca = major_shape[bStart:bEnd]
 		leftEAR = calcular_ear(leftEye)
 		rightEAR = calcular_ear(rightEye)
+		bocaEAR = calcular_boca(boca)
+		boquinhaEAR = calcular_ear(boca)
+
+		print bocaEAR
 
 		# print leftEye[:, -1]
 		# print np.max(leftEye[:, -1])
@@ -178,8 +203,10 @@ while True:
 
 		leftEyeHull = cv2.convexHull(leftEye)
 		rightEyeHull = cv2.convexHull(rightEye)
+		bocaHull = cv2.convexHull(boca)
 		cv2.drawContours(frame, [leftEyeHull], -1, (0, 0, 255), 1)
 		cv2.drawContours(frame, [rightEyeHull], -1, (0, 0, 255), 1)
+		cv2.drawContours(frame, [bocaHull], -1, (65, 223, 107), 1)
 
 		# if (ear < area_min and contador == 0) or (ear < area_max and contador > 0):
 		if ear < area_min:
@@ -210,7 +237,7 @@ while True:
 
 				blink_pub.send('blinks', blink_entry)
 
-				print "piscouu com tempo: ", tempo
+				print "piscou com tempo: ", tempo
 
 			if contador != 0:
 				blink_entry = {
