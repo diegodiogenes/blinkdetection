@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# Hugo Soares -- Baseado em  Soukupova e Cech apude  Adrian Rosebrock
 
 from scipy.spatial import distance as dist
 from imutils.video import FileVideoStream
@@ -13,12 +12,6 @@ import cv2
 import zmq, zmq_tools
 
 
-#  Pontos da regiao do olho
-#         p1        p2
-#     p0                p3
-#         p5        p4
-
-# EAR = eye aspect ratio =  [ || p2 - p6 || + ||p3 - p5|| ] / 2*||p1-p4||
 
 def calcular_ear(olho):
 	A = dist.euclidean(olho[1], olho[5])
@@ -32,18 +25,26 @@ def calcular_boca(boca):
 	D = dist.euclidean(boca[12], boca[18])
 	E = dist.euclidean(boca[13], boca[17])
 	F = dist.euclidean(boca[14], boca[16])
-	ear_boca = (D+E+F)/(3.0)
+	G = dist.euclidean(boca[14], boca[18])
+	ear_boca = (D+E+F+G)/(4.0)
 
 	return ear_boca
 
-def calcular_pequena(boca):
-	G = dist.euclidean(boca[19]-boca[13])
-	H = dist.euclidean(boca[18]-boca[14])
-	I = dist.euclidean(boca[17]-boca[15])
-	ear_boquinha = (G+H+I)/(3.0)
+def distancia_nariz(nariz,boca):
+	dis_nariz = dist.euclidean(nariz[6], boca[3])
 
-	return ear_boquinha
+	return dis_nariz
 
+def distancia_sobrancelha(sobrancelha,olho):
+	A = dist.euclidean(sobrancelha[0], olho[0])
+	B = dist.euclidean(sobrancelha[1], olho[5])
+	C = dist.euclidean(sobrancelha[2], olho[4])
+	D = dist.euclidean(sobrancelha[3], olho[4])
+	E = dist.euclidean(sobrancelha[4], olho[3])
+
+	dis_sobrancelha = (A+B+C+D+E)/5.0
+
+	return dis_sobrancelha
 
 eye_cascade = cv2.CascadeClassifier('haarcascade_eye_tree_eyeglasses.xml')
 
@@ -51,6 +52,7 @@ eye_cascade = cv2.CascadeClassifier('haarcascade_eye_tree_eyeglasses.xml')
 de frames consecutivos em que essa area minima nao seja alcancada para se
 considerar uma piscada"""
 area_min = 0.24
+area_boca = 14.0
 area_max = 0.30
 frames_consecutivos_min = 2
 
@@ -66,7 +68,9 @@ preditor = dlib.shape_predictor(preditor_path)
 (lStart, lEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
 (rStart, rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
 (bStart, bEnd) = face_utils.FACIAL_LANDMARKS_IDXS["mouth"]
-
+(nStart, nEnd) = face_utils.FACIAL_LANDMARKS_IDXS["nose"]
+(slStart, slEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eyebrow"]
+(srStart, srEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eyebrow"]
 
 """
 Inicializa o ZMQ
@@ -79,14 +83,15 @@ print("[INFO] starting video stream thread...")
 vs = VideoStream(src=0).start()
 fileStream = False
 time.sleep(1.0)
-
+tempo_abriu_boca = 0
 timestamp = time.time()
 key = None
 fps = 0.0
 ear = 0
 ear_boca = 0
-ear_boquinha = 0
-
+dis_nariz = 0
+dis_sobrancelha = 0
+aberta  = False
 while True:
 	if fileStream and not vs.more():
 		break
@@ -138,13 +143,19 @@ while True:
 
 		leftEye = major_shape[lStart:lEnd]
 		rightEye = major_shape[rStart:rEnd]
+		rightEyebrow = major_shape[srStart:srEnd]
+		leftEyebrow = major_shape[slStart:slEnd]
 		boca = major_shape[bStart:bEnd]
+		nariz = major_shape[nStart:nEnd]
+		distRight = distancia_sobrancelha(rightEyebrow, rightEye)
+		distLeft = distancia_sobrancelha(leftEyebrow, leftEye)
 		leftEAR = calcular_ear(leftEye)
 		rightEAR = calcular_ear(rightEye)
 		bocaEAR = calcular_boca(boca)
-		boquinhaEAR = calcular_ear(boca)
+		dis_nariz = distancia_nariz(nariz,boca)
 
-		print bocaEAR
+		dis_sobrancelha = (distRight+distLeft)/2
+
 
 		# print leftEye[:, -1]
 		# print np.max(leftEye[:, -1])
@@ -208,6 +219,14 @@ while True:
 		cv2.drawContours(frame, [rightEyeHull], -1, (0, 0, 255), 1)
 		cv2.drawContours(frame, [bocaHull], -1, (65, 223, 107), 1)
 
+		if bocaEAR > area_boca and aberta == True:
+			tempo_abriu_boca = timestamp
+		elif bocaEAR <= area_boca and aberta == True:
+			temp = timestamp - tempo_abriu_boca
+			aberta = True
+		else:
+			aberta = False
+
 		# if (ear < area_min and contador == 0) or (ear < area_max and contador > 0):
 		if ear < area_min:
 			if contador == 0:
@@ -251,8 +270,17 @@ while True:
 
 			contador = 0
 
-		cv2.putText(frame, u"Area: {:.2f}".format(ear), (300, 30),
+		cv2.putText(frame, u"Olho: {:.2f}".format(ear), (250, 30),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+		cv2.putText(frame, u"Boca: {:.2f}".format(bocaEAR), (470, 30),
+		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (65, 223, 107), 2)
+
+		cv2.putText(frame, u"Distancia: {:.2f}".format(dis_nariz), (450, 100),
+		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (65, 223, 107), 2)
+
+		cv2.putText(frame, u"Sobrancelha: {:.2f}".format(dis_sobrancelha), (0, 100),
+		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (65, 223, 107), 2)
 
 		cv2.putText(frame, "FPS: {:.2f}".format(fps), (0, 30),
 		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
