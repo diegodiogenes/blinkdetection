@@ -32,11 +32,12 @@ def calcular_boca(boca):
 	return ear_boca
 
 def distancia_nariz(nariz,boca):
-	A = dist.euclidean(nariz[5], boca[12]) #boca[0]
+	#A = dist.euclidean(nariz[5], boca[12]) #boca[0]
 	B = dist.euclidean(nariz[6], boca[14]) #boca[5]
-	C = dist.euclidean(nariz[7], boca[4])
+	#C = dist.euclidean(nariz[7], boca[4])
+	#D = dist.euclidean(nariz[4], boca[2])
 
-	dis_nariz = (A + B) / (2.0 * C)
+	dis_nariz = B  #(A + C + B) / (3.0 * D)
 
 	return dis_nariz
 
@@ -79,6 +80,7 @@ preditor = dlib.shape_predictor(preditor_path)
 (nStart, nEnd) = face_utils.FACIAL_LANDMARKS_IDXS["nose"]
 (slStart, slEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eyebrow"]
 (srStart, srEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eyebrow"]
+(jStart, jEnd) = face_utils.FACIAL_LANDMARKS_IDXS["jaw"]
 
 """
 Inicializa o ZMQ
@@ -88,7 +90,7 @@ zmq_ctx = zmq.Context()
 blink_pub = zmq_tools.Msg_Streamer(zmq_ctx, 'tcp://127.0.0.1:50020')
 
 print("[INFO] starting video stream thread...")
-vs = VideoStream(src=0).start()
+vs = VideoStream(src=1).start()
 fileStream = False
 time.sleep(1.0)
 tempo_abriu_boca = 0
@@ -103,6 +105,7 @@ aberta = False
 calibrar = False
 conta = 0
 aux = 0
+aux2 = 0
 while True:
 	if fileStream and not vs.more():
 		break
@@ -158,6 +161,7 @@ while True:
 		leftEyebrow = major_shape[slStart:slEnd]
 		boca = major_shape[bStart:bEnd]
 		nariz = major_shape[nStart:nEnd]
+		jaw = major_shape[jStart:jEnd]
 		distRight = distancia_sobrancelha(rightEyebrow, rightEye)
 		distLeft = distancia_sobrancelha(leftEyebrow, leftEye)
 		leftEAR = calcular_ear(leftEye)
@@ -189,17 +193,14 @@ while True:
 			if(tempod > 0.5):
 				boca_min = (boca_min/cont) * 1.02
 				nariz_min = (nariz_min/cont) * 1.04
-				sobrancelha_min = (sobrancelha_min/cont)
+				sobrancelha_min = (sobrancelha_min/cont) * 1.01
 
 				print boca_min
 				print nariz_min
 				print sobrancelha_min
 
 				calibrar = False
-		dif_rela = (abs(dis_sobrancelha - sobrancelha_min)/dis_sobrancelha)*100
-		if(dis_sobrancelha > sobrancelha_min * 1.04):
-			print dif_rela
-			print "levantou"
+
 
 		if (bocaEAR > boca_min*1.2):
 			if conta == 0:
@@ -225,9 +226,35 @@ while True:
 				print "boca fechada"
 
 			conta = 0
+		dif_rela = (abs(dis_sobrancelha - sobrancelha_min)/dis_sobrancelha)*100
+		if(dis_sobrancelha > sobrancelha_min * 1.04):
+			if aux2 == 0:
+				levantou = timestamp
+
+				print "levantou a sobrancelha"
+
+			conta+=1
+		else:
+			if aux2 >= frames_consecutivos_min:
+				tempo_levantada = timestamp - levantou
+
+				print "levantou a sobrancelha com tempo:", tempo_levantada
+
+				if(tempo_levantada > 2.0):
+					blink_entry = {
+						'topic': 'sobrancelha'
+					}
+
+				blink_pub.send('blinks', blink_entry)
+
+			if aux2 !=0:
+				print "sobrancelha normal"
+
+			aux2 = 0
 
 		dif_rel = (abs(dis_nariz-nariz_min)/dis_nariz)*100
-		if(dis_nariz < nariz_min and dif_rel>25.0):
+		#print dif_rel
+		if(dis_nariz < nariz_min and dif_rel>14.0):
 			if aux == 0:
 				inicio_muxoxo = timestamp
 
@@ -273,15 +300,16 @@ while True:
 				tempo = timestamp - tempo_inicio_piscada
 
 			# Envia a informação do pisca na rede
-				blink_entry = {
-					'topic': 'blink',
-					'tempo': tempo,
-					'timestamp': timestamp
-				}
+				if(tempo>2.0):
+					blink_entry = {
+						'topic': 'piscar',
+						'tempo': tempo,
+						'timestamp': timestamp
+					}
 
-				blink_pub.send('blinks', blink_entry)
+					blink_pub.send('blinks', blink_entry)
 
-				print "piscou com tempo: ", tempo
+					print "piscou com tempo: ", tempo
 
 			if contador != 0:
 				blink_entry = {
