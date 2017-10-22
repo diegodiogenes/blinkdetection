@@ -32,12 +32,16 @@ def calcular_boca(boca):
 	return ear_boca
 
 def distancia_nariz(nariz,boca):
+	A = dist.euclidean(boca[0], boca[6])
+	#B = dist.euclidean(boca[12], boca[16])
+	C = dist.euclidean(boca[14], nariz[6])
+	#D = dist.euclidean(boca[3], nariz[3])
 	#A = dist.euclidean(nariz[5], boca[12]) #boca[0]
-	B = dist.euclidean(nariz[6], boca[14]) #boca[5]
+	#B = dist.euclidean(nariz[6], boca[14]) #boca[5]
 	#C = dist.euclidean(nariz[7], boca[4])
 	#D = dist.euclidean(nariz[4], boca[2])
 
-	dis_nariz = B  #(A + C + B) / (3.0 * D)
+	dis_nariz = (A*C)/2.0  #(A + C + B) / (3.0 * D)
 
 	return dis_nariz
 
@@ -66,8 +70,10 @@ nariz_min = 0
 sobrancelha_min = 0
 
 """ Contador = numeros de frames seguidos em que a ear < area_min.
-Total de piscadas  """
+Total de piscadas e contador_calibrar = contador para fazer a calibração  """
 contador = 0
+contador_calibrar = 0
+medicao = False
 
 print("[INFO] carregando shape...")
 preditor_path = "shape_predictor_68_face_landmarks.dat"
@@ -90,7 +96,7 @@ zmq_ctx = zmq.Context()
 blink_pub = zmq_tools.Msg_Streamer(zmq_ctx, 'tcp://127.0.0.1:50020')
 
 print("[INFO] starting video stream thread...")
-vs = VideoStream(src=1).start()
+vs = VideoStream(src=0).start()
 fileStream = False
 time.sleep(1.0)
 tempo_abriu_boca = 0
@@ -106,6 +112,13 @@ calibrar = False
 conta = 0
 aux = 0
 aux2 = 0
+comecar = False
+cont = 0
+port = 5000
+context = zmq.Context()
+socket = context.socket(zmq.REP)
+socket.bind("tcp://*:%s"%port)
+gesto = False
 while True:
 	if fileStream and not vs.more():
 		break
@@ -129,216 +142,221 @@ while True:
 	major_shape = ()
 	max_size = 0
 
-	for rect in rects:
-		shape = preditor(gray, rect)
-		shape = face_utils.shape_to_np(shape)
+	if(comecar):
+		for rect in rects:
+			shape = preditor(gray, rect)
+			shape = face_utils.shape_to_np(shape)
 
-		max_p = np.max(shape, axis=0)
-		min_p = np.min(shape, axis=0)
+			max_p = np.max(shape, axis=0)
+			min_p = np.min(shape, axis=0)
 
-		if np.sum(max_p - min_p) > max_size:
-			major_shape = shape
-			max_size = np.sum(max_p - min_p)
+			if np.sum(max_p - min_p) > max_size:
+				major_shape = shape
+				max_size = np.sum(max_p - min_p)
 
-	if len(major_shape) > 0:
+		if len(major_shape) > 0:
 
-		#
-		# face = gray[min_p[1]:max_p[1], min_p[0]:max_p[0]]
-		#
-		# cv2.imshow("face", face)
+			#
+			# face = gray[min_p[1]:max_p[1], min_p[0]:max_p[0]]
+			#
+			# cv2.imshow("face", face)
 
-		# eyes = eye_cascade.detectMultiScale(face)
-		#
-		# for (ex,ey,ew,eh) in eyes:
-		# 	cv2.rectangle(frame,(ex + min_p[0] ,ey + min_p[1]),(ex + min_p[0] + ew,ey + eh + min_p[1]),(0,255,0),2)
+			# eyes = eye_cascade.detectMultiScale(face)
+			#
+			# for (ex,ey,ew,eh) in eyes:
+			# 	cv2.rectangle(frame,(ex + min_p[0] ,ey + min_p[1]),(ex + min_p[0] + ew,ey + eh + min_p[1]),(0,255,0),2)
 
-		for p in major_shape:
-			cv2.circle(frame, tuple(p), 2, (0, 0, 0), -1)
+			for p in major_shape:
+				cv2.circle(frame, tuple(p), 2, (0, 0, 0), -1)
 
-		leftEye = major_shape[lStart:lEnd]
-		rightEye = major_shape[rStart:rEnd]
-		rightEyebrow = major_shape[srStart:srEnd]
-		leftEyebrow = major_shape[slStart:slEnd]
-		boca = major_shape[bStart:bEnd]
-		nariz = major_shape[nStart:nEnd]
-		jaw = major_shape[jStart:jEnd]
-		distRight = distancia_sobrancelha(rightEyebrow, rightEye)
-		distLeft = distancia_sobrancelha(leftEyebrow, leftEye)
-		leftEAR = calcular_ear(leftEye)
-		rightEAR = calcular_ear(rightEye)
-		bocaEAR = calcular_boca(boca)
-		dis_nariz = distancia_nariz(nariz,boca)
+			leftEye = major_shape[lStart:lEnd]
+			rightEye = major_shape[rStart:rEnd]
+			rightEyebrow = major_shape[srStart:srEnd]
+			leftEyebrow = major_shape[slStart:slEnd]
+			boca = major_shape[bStart:bEnd]
+			nariz = major_shape[nStart:nEnd]
+			jaw = major_shape[jStart:jEnd]
+			distRight = distancia_sobrancelha(rightEyebrow, rightEye)
+			distLeft = distancia_sobrancelha(leftEyebrow, leftEye)
+			leftEAR = calcular_ear(leftEye)
+			rightEAR = calcular_ear(rightEye)
+			bocaEAR = calcular_boca(boca)
+			dis_nariz = distancia_nariz(nariz,boca)
 
-		dis_sobrancelha = (distRight+distLeft)/2
+			dis_sobrancelha = (distRight+distLeft)/2
 
-		ear = (leftEAR + rightEAR) / 2.0
+			ear = (leftEAR + rightEAR) / 2.0
 
-		leftEyeHull = cv2.convexHull(leftEye)
-		rightEyeHull = cv2.convexHull(rightEye)
-		bocaHull = cv2.convexHull(boca)
-		cv2.drawContours(frame, [leftEyeHull], -1, (0, 0, 255), 1)
-		cv2.drawContours(frame, [rightEyeHull], -1, (0, 0, 255), 1)
-		cv2.drawContours(frame, [bocaHull], -1, (65, 223, 107), 1)
+			leftEyeHull = cv2.convexHull(leftEye)
+			rightEyeHull = cv2.convexHull(rightEye)
+			bocaHull = cv2.convexHull(boca)
+			cv2.drawContours(frame, [leftEyeHull], -1, (0, 0, 255), 1)
+			cv2.drawContours(frame, [rightEyeHull], -1, (0, 0, 255), 1)
+			cv2.drawContours(frame, [bocaHull], -1, (65, 223, 107), 1)
 
-		#calibrar e fazer a média
-		inicio = time.time()
-		cont = 0
-		while(calibrar):
-			tempod = time.time() - inicio
+			#calibrar e fazer a média
 
-			boca_min += bocaEAR
-			nariz_min += dis_nariz
-			sobrancelha_min += dis_sobrancelha
-			cont += 1
-			if(tempod > 0.5):
-				boca_min = (boca_min/cont) * 1.02
-				nariz_min = (nariz_min/cont) * 1.04
-				sobrancelha_min = (sobrancelha_min/cont) * 1.01
+			if(calibrar):
+				print "calibrando"
+				if(cont == 0):
+					inicio = timestamp
+					cont += 1
+				elif(cont>0):
+					tempod = timestamp - inicio
+					boca_min += bocaEAR
+					nariz_min += dis_nariz
+					sobrancelha_min += dis_sobrancelha
+					area_min += ear
+					cont += 1
 
-				print boca_min
-				print nariz_min
-				print sobrancelha_min
+					if tempod > 5.0:
+						calibrar = False
+						boca_min = boca_min/cont
+						nariz_min = nariz_min/cont
+						sobrancelha_min = sobrancelha_min/cont
+						area_min = area_min/cont
+						print "----Áreas mínimas----"
+						print "Distância mínima da boca: " , boca_min
+						print "Distância mínima do nariz: " , nariz_min
+						print "Distância mínima das sobrancelhas: " , sobrancelha_min
+						print "Distância mínima das olhos: " , area_min
+						cont = 0
 
-				calibrar = False
+			else:
+				if (bocaEAR > boca_min*1.2):
+
+					if conta == 0:
+						abriu_boca = timestamp
+
+						print "abriu a boca"
+
+					conta += 1
+				else:
+					if conta >= frames_consecutivos_min:
+						tempo_boca = timestamp - abriu_boca
+
+						print "abriu boca com tempo", tempo_boca
+
+						if(tempo_boca > 1.5):
+							blink_entry = {
+								'topic': 'abrir_boca'
+							}
+
+							blink_pub.send('blinks', blink_entry)
 
 
-		if (bocaEAR > boca_min*1.2):
-			if conta == 0:
-				abriu_boca = timestamp
+					if conta !=0:
+						print "boca fechada"
 
-				print "abriu a boca"
+					conta = 0
 
-			conta += 1
-		else:
-			if conta >= frames_consecutivos_min:
-				tempo_boca = timestamp - abriu_boca
+				dif_rela = (abs(dis_sobrancelha - sobrancelha_min)/dis_sobrancelha)*100
+				if(dis_sobrancelha > sobrancelha_min * 1.04):
+					if aux2 == 0:
+						levantou = timestamp
 
-				print "abriu boca com tempo", tempo_boca
+						print "levantou a sobrancelha"
 
-				if(tempo_boca > 2.0):
-					blink_entry = {
-						'topic': 'abrir_boca'
-					}
+					aux2+=1
+				else:
+					if aux2 >= frames_consecutivos_min:
+						tempo_levantada = timestamp - levantou
 
-				blink_pub.send('blinks', blink_entry)
+						print "levantou a sobrancelha com tempo:", tempo_levantada
 
-			if conta !=0:
-				print "boca fechada"
+						if(tempo_levantada > 1.5):
+							blink_entry = {
+								'topic': 'sobrancelha'
+							}
 
-			conta = 0
-		dif_rela = (abs(dis_sobrancelha - sobrancelha_min)/dis_sobrancelha)*100
-		if(dis_sobrancelha > sobrancelha_min * 1.04):
-			if aux2 == 0:
-				levantou = timestamp
+							blink_pub.send('blinks', blink_entry)
 
-				print "levantou a sobrancelha"
+					if aux2 !=0:
+						print "sobrancelha normal"
 
-			conta+=1
-		else:
-			if aux2 >= frames_consecutivos_min:
-				tempo_levantada = timestamp - levantou
+					aux2 = 0
 
-				print "levantou a sobrancelha com tempo:", tempo_levantada
+				dif_rel = (abs(dis_nariz-nariz_min)/dis_nariz)*100
+				#print dif_rel
+				if(dis_nariz < nariz_min and dif_rel>14.0):
+					if aux == 0:
+						inicio_muxoxo = timestamp
 
-				if(tempo_levantada > 2.0):
-					blink_entry = {
-						'topic': 'sobrancelha'
-					}
+						print "começou muxoxo"
 
-				blink_pub.send('blinks', blink_entry)
+					aux += 1
+				else:
+					if aux >= frames_consecutivos_min:
+						tempo_muxoxo = timestamp - inicio_muxoxo
 
-			if aux2 !=0:
-				print "sobrancelha normal"
+						print "fez muxoxo com tempo", tempo_muxoxo
 
-			aux2 = 0
+						if(tempo_muxoxo>1.5):
+							blink_entry ={
+								'topic':'muxoxo'
+							}
 
-		dif_rel = (abs(dis_nariz-nariz_min)/dis_nariz)*100
-		#print dif_rel
-		if(dis_nariz < nariz_min and dif_rel>14.0):
-			if aux == 0:
-				inicio_muxoxo = timestamp
+							blink_pub.send('blinks', blink_entry)
 
-				print "começou muxoxo"
+					if aux != 0:
+						print "normal"
 
-			aux += 1
-		else:
-			if aux >= frames_consecutivos_min:
-				tempo_muxoxo = timestamp - inicio_muxoxo
+					aux = 0
 
-				print "fez muxoxo com tempo", tempo_muxoxo
+				# if (ear < area_min and contador == 0) or (ear < area_max and contador > 0):
+				dif_rel1 = (abs(ear- area_min)/ear)*100
 
-				if(tempo_muxoxo>2.0):
-					blink_entry ={
-						'topic':'muxoxo'
-					}
+				if ear < area_min and dif_rel1 > 1.4:
+					if contador == 0:
+						tempo_inicio_piscada = timestamp
 
-				blink_pub.send('blinks', blink_entry)
+					contador += 1
+				else:
+					# Abriu novamente o olho
+					if contador >= frames_consecutivos_min:
+						tempo = timestamp - tempo_inicio_piscada
 
-			if aux != 0:
-				print "normal"
+					# Envia a informação do pisca na rede
+						if(tempo>1.5):
+							blink_entry = {
+								'topic': 'piscar',
+								'tempo': tempo,
+								'timestamp': timestamp
+							}
 
-			aux = 0
+							blink_pub.send('blinks', blink_entry)
 
-		# if (ear < area_min and contador == 0) or (ear < area_max and contador > 0):
-		if ear < area_min:
-			if contador == 0:
-				tempo_inicio_piscada = timestamp
+							print "piscou com tempo: ", tempo
 
-				blink_entry = {
-					'topic': 'close',
-					'timestamp': timestamp
-				}
+					if contador != 0:
+						blink_entry = {
+							'topic': 'open',
+							'timestamp': timestamp
+						}
 
-				blink_pub.send('blinks', blink_entry)
 
-				print 'close'
 
-			contador += 1
-		else:
-			# Abriu novamente o olho
-			if contador >= frames_consecutivos_min:
-				tempo = timestamp - tempo_inicio_piscada
+						blink_pub.send('blinks', blink_entry)
 
-			# Envia a informação do pisca na rede
-				if(tempo>2.0):
-					blink_entry = {
-						'topic': 'piscar',
-						'tempo': tempo,
-						'timestamp': timestamp
-					}
+					contador = 0
+					tempo = 0
 
-					blink_pub.send('blinks', blink_entry)
+			cv2.putText(frame, u"Olho: {:.2f}".format(ear), (250, 30),
+			cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-					print "piscou com tempo: ", tempo
+			cv2.putText(frame, u"Boca: {:.2f}".format(bocaEAR), (470, 30),
+			cv2.FONT_HERSHEY_SIMPLEX, 0.7, (65, 223, 107), 2)
 
-			if contador != 0:
-				blink_entry = {
-					'topic': 'open',
-					'timestamp': timestamp
-				}
+			cv2.putText(frame, u"Distancia: {:.2f}".format(dis_nariz), (450, 100),
+			cv2.FONT_HERSHEY_SIMPLEX, 0.7, (65, 223, 107), 2)
 
-				print 'open'
+			cv2.putText(frame, u"Sobrancelha: {:.2f}".format(dis_sobrancelha), (0, 100),
+			cv2.FONT_HERSHEY_SIMPLEX, 0.7, (65, 223, 107), 2)
 
-				blink_pub.send('blinks', blink_entry)
+			cv2.putText(frame, "FPS: {:.2f}".format(fps), (0, 30),
+			cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-			contador = 0
-
-		cv2.putText(frame, u"Olho: {:.2f}".format(ear), (250, 30),
-		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-
-		cv2.putText(frame, u"Boca: {:.2f}".format(bocaEAR), (470, 30),
-		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (65, 223, 107), 2)
-
-		cv2.putText(frame, u"Distancia: {:.2f}".format(dis_nariz), (450, 100),
-		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (65, 223, 107), 2)
-
-		cv2.putText(frame, u"Sobrancelha: {:.2f}".format(dis_sobrancelha), (0, 100),
-		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (65, 223, 107), 2)
-
-		cv2.putText(frame, "FPS: {:.2f}".format(fps), (0, 30),
-		cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-
-		cv2.imshow("Frame", frame)
+	cv2.imshow("Frame", frame)
 
 	# cv2.imshow("Gray", laplacian)
 	key = cv2.waitKey(1) & 0xFF
@@ -359,6 +377,7 @@ while True:
 		print "Quantidade de frames alterada: ", frames_consecutivos_min
 	if key == ord("c"):
 		calibrar = True
+		comecar = True
 	if key == ord("q"):
 		break
 
